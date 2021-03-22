@@ -4,6 +4,7 @@ ESP32 sử dụng cổng hardware serial với chân RX là 16, chân TX là 17;
 */
 
 #include <Arduino.h>
+#include "MicroNMEA.h"
 
 // Khai báo Hardware serial và Bluetooth buffers
 #include "BluetoothSerial.h"
@@ -19,7 +20,9 @@ uint8_t w_buffer[SERIAL_SIZE_BUFFER]; //buffer for writing Zed-F9P
 uint8_t unit_MAC_address[6]; //MAC address in BT broadcast
 char device_name[20]; //the serial string that is broadcast
 bool in_test_mode = false; // use to retrafic Bluetooth while in test
-
+ //Buffer for NMEA processing
+char NMEA_buffer[120];
+MicroNMEA nmea(NMEA_buffer, sizeof(NMEA_buffer));
 //Khai báo nguyên mẫu hàm:
 // Hàm khởi tạo bluetooth
 void beginBT();
@@ -44,7 +47,15 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  delay(10);
+  delay(100);
+  Serial.print("Num of satellite: ");
+  Serial.println(nmea.getNumSatellites());
+  Serial.print("HDOP: ");
+  Serial.println(nmea.getHDOP()/10., 1);
+  Serial.print("Latitude (deg): ");
+  Serial.println(nmea.getLatitude() / 1000000., 6);
+  Serial.print("Longitude (deg): ");
+  Serial.println(nmea.getLongitude() / 1000000., 6);
 }
 
 //Get MAC, start radio
@@ -137,6 +148,14 @@ void F9PSerialReadTask(void *e)
     if (GNSS.available())
     {
       auto s = GNSS.readBytes(r_buffer, SERIAL_SIZE_BUFFER);
+      //debug
+      //Serial.printf("Buffer length = %d\r\n", s);
+      //Pass the stream to NMEA processor
+      uint16_t iter;
+      for (iter = 0; iter < s; iter++) {
+        nmea.process(r_buffer[iter]);
+      }
+      //end
     if (Serial_BT.connected())
       {
         Serial_BT.write(r_buffer, s);
